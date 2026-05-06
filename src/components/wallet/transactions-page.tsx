@@ -31,9 +31,9 @@ import {
   transactionTypeLabels,
   transactionStatusColors,
 } from '@/lib/mock-data';
-import type { TransactionStatus } from '@/types/atlas';
 import {
   TransactionType,
+  TransactionStatus,
   Currency,
 } from '@/types/atlas';
 import {
