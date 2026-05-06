@@ -61,3 +61,23 @@ Stage Summary:
 - Marketing copy: "O Futuro da Logística Financeira"
 - All background animations and effects preserved from original design
 - Completely client-rendered SPA - no SSR needed for landing
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Remove mock data, connect real API — 3 critical bug fixes
+
+Work Log:
+- Fixed API client (src/lib/api/client.ts): baseURL = process.env.NEXT_PUBLIC_API_URL (already ends in /api/v1), no localhost ever
+- Fixed RBAC (src/stores/auth-store.ts): Removed 'admin' role entirely. Roles: customer, merchant, super_merchant, operator. Role comes from auth payload. isOperator()/isMerchant() helpers.
+- Fixed Sidebar (src/components/layout/atlas-sidebar.tsx): Merchants (User role) CANNOT see 'Aprovações' or 'Liquidez' tabs. Only Operators (OrgOperator) see Admin section.
+- Fixed API Keys (src/components/dashboard/merchant-api-keys-page.tsx): GET /merchant/api-keys + POST /merchant/api-keys/generate. Removed ALL mock INITIAL_KEYS. Shows real keys from backend.
+- Fixed Swap (src/components/wallet/swaps-page.tsx): Consumes GET /public/rates for live exchange rates. Removed ALL hardcoded APPROX_RATES. Rate lookup with USD cross-rate fallback. Live rates table.
+- Fixed Landing (src/components/layout/atlas-landing.tsx): Real POST /auth/login. Dev mode: 4 roles (removed 'admin'). Error display on login failure.
+- Updated .env.example: Single variable NEXT_PUBLIC_API_URL
+
+Stage Summary:
+- 3 critical bugs fixed: RBAC, API Keys, Motor de Taxas
+- Zero hardcoded mock data in business logic
+- All data comes from process.env.NEXT_PUBLIC_API_URL (Atlas Core backend)
+- RBAC enforced: backend decides role via JWT payload, frontend adapts UI
