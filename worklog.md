@@ -31,3 +31,33 @@ Stage Summary:
 - All mock data ready for development without backend
 - Dark theme, institutional Web3 aesthetic with emerald/teal accents
 - SPA architecture on single `/` route using zustand navigation store
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Redesign Landing Page — Exchange-style with Crypto Cards, TradingView Widget, Login/Register
+
+Work Log:
+- Created API proxy route `/api/binance` (src/app/api/binance/route.ts) - proxies Binance public API with mock fallback + sparkline generation
+- Created TradingView Widget loader (src/components/shared/tradingview-widget.tsx) - dynamically loads TradingView public widgets (market-overview, ticker-tape, symbol-info)
+- Created Crypto Cards component (src/components/shared/crypto-cards.tsx) - Binance/KuCoin-style cards with: ticker symbol, price, 24h change %, sparkline SVG chart, high/low/volume stats, scrolling ticker tape, auto-refresh every 30s, graceful fallback to inline mock data
+- Created Atlas Landing Page (src/components/layout/atlas-landing.tsx) - full redesign:
+  - LEFT PANEL: Scrolling ticker tape + 9 crypto cards grid (BTC, ETH, SOL, BNB, XRP, ADA, DOGE, DOT, AVAX) + TradingView Market Overview widget + Features grid (Multi-Wallet, Motor de Swap, KYC Progressivo, Infraestrutura Segura)
+  - RIGHT PANEL: Atlas Core branding + "O Futuro da Logística Financeira" headline + Login/Register tabs + Trust indicators (Seguro, Global, Instant) + Dev Mode access
+  - HEADER: Stats bar ($2.4B+ Volume, 150K+ Transações/Mês, 99.9% Uptime, < 2s Settlement)
+  - FOOTER: Copyright + links
+  - Background: Grid pattern + 3 pulsing gradient glows (emerald/teal) + all animations preserved
+- Added custom CSS animations (globals.css): ticker-scroll (40s seamless loop), float-up, pulse-glow, slide-in-left, slide-in-right, gradient-x, custom scrollbar
+- Updated page.tsx to use AtlasLanding instead of AtlasLogin
+- Fixed lint errors in tradingview-widget.tsx (removed setState-in-effect)
+- All lint checks pass, dev server compiles clean, HTTP 200
+
+Stage Summary:
+- Professional exchange-style landing page matching KuCoin/Binance aesthetic
+- Live Binance API data via server-side proxy (graceful fallback to mock)
+- TradingView Market Overview widget embedded (free public widget)
+- 9 crypto pairs with sparkline charts, 24h change, volume
+- Login/Register focused on driving account creation (not direct trading)
+- Marketing copy: "O Futuro da Logística Financeira"
+- All background animations and effects preserved from original design
+- Completely client-rendered SPA - no SSR needed for landing

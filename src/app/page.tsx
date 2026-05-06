@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNavStore } from '@/stores/nav-store';
-import AtlasLogin from '@/components/layout/atlas-login';
+import AtlasLanding from '@/components/layout/atlas-landing';
 import AtlasSidebar from '@/components/layout/atlas-sidebar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -98,9 +98,9 @@ export default function Home() {
     );
   }
 
-  // Not authenticated → show login
+  // Not authenticated → show landing page
   if (!isAuthenticated) {
-    return <AtlasLogin />;
+    return <AtlasLanding />;
   }
 
   // Authenticated → show dashboard layout
