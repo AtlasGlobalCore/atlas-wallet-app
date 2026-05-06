@@ -1,25 +1,33 @@
 ---
 Task ID: 1
 Agent: Main Agent
-Task: Clone, deploy and fix atlas-wallet-app for API connection adaptation
+Task: Restructure Frontend to Atlas Core - Complete Fintech Web3 Command Center
 
 Work Log:
-- Cloned https://github.com/AtlasGlobalCore/atlas-wallet-app.git to /home/z/atlas-wallet-app
-- Explored full project structure: Next.js 16 + Tailwind CSS 4 + shadcn/ui + Prisma + Zustand
-- Installed all dependencies with `bun install` (827 packages)
-- Pushed Prisma schema to SQLite database
-- Identified and fixed 3 bugs preventing compilation:
-  1. Store missing `userEmail` and `userBalance` properties - added `selectUserEmail` and `selectUserBalance` computed selectors
-  2. `next.config.ts` missing image domains for CoinGecko external images - added `remotePatterns` for `assets.coingecko.com`
-  3. `DialogContent` using non-existent `showCloseButton` prop in `auth-modal.tsx` - removed the prop
-- Fixed syntax error in `store.ts` where generic closing `>` was mangled to `()` during edit
-- Started dev server on port 3000 - confirmed HTTP 200 response
+- Explored current project structure (clean Next.js 16 + shadcn/ui scaffold)
+- Installed axios for API client
+- Created TypeScript types from Prisma Schema (src/types/atlas.ts) - all enums, models, request/response types, RBAC permissions
+- Created API client with JWT interceptors (src/lib/api/client.ts) - axios instance, token management, all API modules (auth, wallets, transactions, deposits, swaps, withdrawals, kyc, fees, tickets, organizations, users, merchant)
+- Created Auth Store with Zustand (src/stores/auth-store.ts) - RBAC permissions matrix, role-based access, token/user persistence
+- Created Navigation Store (src/stores/nav-store.ts) - client-side SPA routing, 14 pages
+- Created Theme Provider (src/providers/theme-provider.tsx)
+- Updated Root Layout with Atlas Core branding (dark theme, Inter + JetBrains Mono fonts)
+- Created Mock Data (src/lib/mock-data.ts) - wallets, transactions, fees, KYC profile, tickets, organizations, users, tier limits, deposit routes
+- Built Login Page (src/components/layout/atlas-login.tsx) - glassmorphism, emerald/teal, dev mode with 5 roles
+- Built Sidebar (src/components/layout/atlas-sidebar.tsx) - full RBAC navigation, collapsible, 5 sections
+- Built Root Page (src/app/page.tsx) - auth gate, SPA routing, hydration-safe
+- Built Dashboard Overview (src/components/dashboard/dashboard-page.tsx) - stats, wallets, transactions, quick actions
+- Built Wallet Pages (5 files): wallets, deposits (4-step wizard), swaps (quote + execution), withdrawals (bank/crypto), transactions (filters + table + pagination)
+- Built KYC Page (src/components/kyc/kyc-page.tsx) - progressive tiers 0-3, forms, external verification
+- Built Admin Pages (5 files): tickets, users, fees, organizations + merchant links, API keys
+- Fixed lint error (setState-in-effect) in page.tsx
+- All lint checks pass, dev server returns 200
 
 Stage Summary:
-- Project successfully deployed and running at http://localhost:3000
-- All 6 API routes are functional (mock mode): /api/create-order, /api/convert, /api/auth/login, /api/auth/register, /api/gateway/status, /api/gateway/routes
-- Landing page with crypto wallet simulator (Buy/Sell/Swap) working
-- Dashboard with sidebar navigation (Overview/Statements/Payouts/Tickets) working
-- Auth modal with dev login (Seller/Operator/Admin roles) available
-- Gateway Panel (bottom-right terminal icon) shows real-time status
-- All API functions in src/lib/api/wallet.ts return mock data, ready for real API connection
+- Complete Atlas Core frontend built with 20+ components
+- TypeScript types rigorously match Prisma schema
+- API client configured with JWT interceptors ready for Atlas Core Banking REST API
+- RBAC with 5 roles: Customer, Merchant, Super Merchant, Admin, Operator
+- All mock data ready for development without backend
+- Dark theme, institutional Web3 aesthetic with emerald/teal accents
+- SPA architecture on single `/` route using zustand navigation store
