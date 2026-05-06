@@ -1,13 +1,23 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import type { ApiError } from '@/types/atlas';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_ATLAS_API_URL || '/api';
-
 // ============================================================
 // ATLAS CORE - API Client (Axios com JWT Interceptors)
-// O Frontend NÃO comunica com o Supabase diretamente.
-// Todas as chamadas passam pela API REST do Atlas Core Banking.
+// 
+// REGRA DE OURO: A variável NEXT_PUBLIC_API_URL já inclui /api/v1
+// Ex: https://api.atlasglobal.digital/api/v1
+// As rotas são concatenadas diretamente a partir daqui.
+// NUNCA usar 'localhost' hardcoded.
 // ============================================================
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
+if (!API_BASE_URL) {
+  console.warn(
+    '[Atlas Core] NEXT_PUBLIC_API_URL não está definida. ' +
+    'As chamadas à API irão falhar. Defina no .env ou na Vercel.'
+  );
+}
 
 const atlasClient = axios.create({
   baseURL: API_BASE_URL,
@@ -37,11 +47,9 @@ atlasClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiError>) => {
     if (error.response?.status === 401) {
-      // Token expirado ou inválido - fazer logout e redirecionar
       if (typeof window !== 'undefined') {
         clearStoredToken();
         clearStoredUser();
-        // Usar evento custom em vez de importar o store para evitar circular deps
         window.dispatchEvent(new CustomEvent('atlas:unauthorized'));
       }
     }
@@ -87,12 +95,15 @@ export function clearStoredUser(): void {
   sessionStorage.removeItem('atlas_user');
 }
 
-// --- API Modules ---
+// ============================================================
+// API Modules
+// Todas as rotas são relativas a NEXT_PUBLIC_API_URL (/api/v1)
+// ============================================================
 
 export const atlasApi = {
-  // AUTH
+  // ── AUTH ──
   auth: {
-    login: async (data: { email?: string; atlasId?: string; password: string }) => {
+    login: async (data: { email?: string; password: string }) => {
       const res = await atlasClient.post('/auth/login', data);
       return res.data;
     },
@@ -100,82 +111,62 @@ export const atlasApi = {
       const res = await atlasClient.get('/auth/me');
       return res.data;
     },
-    refresh: async () => {
-      const res = await atlasClient.post('/auth/refresh');
+  },
+
+  // ── PUBLIC (sem autenticação) ──
+  public: {
+    // Taxas de câmbio reais para o motor de swap
+    getRates: async () => {
+      const res = await atlasClient.get('/public/rates');
       return res.data;
     },
   },
 
-  // WALLETS
+  // ── WALLETS ──
   wallets: {
-    list: async (userId?: string) => {
-      const params = userId ? { userId } : {};
-      const res = await atlasClient.get('/wallets', { params });
+    list: async () => {
+      const res = await atlasClient.get('/wallets');
       return res.data;
     },
     getById: async (id: string) => {
       const res = await atlasClient.get(`/wallets/${id}`);
       return res.data;
     },
-    getBalance: async (id: string) => {
-      const res = await atlasClient.get(`/wallets/${id}/balance`);
-      return res.data;
-    },
   },
 
-  // TRANSACTIONS
+  // ── TRANSACTIONS ──
   transactions: {
     list: async (params?: { walletId?: string; type?: string; status?: string; page?: number; pageSize?: number }) => {
       const res = await atlasClient.get('/transactions', { params });
       return res.data;
     },
-    getById: async (id: string) => {
-      const res = await atlasClient.get(`/transactions/${id}`);
-      return res.data;
-    },
   },
 
-  // DEPOSITS (IN)
+  // ── DEPOSITS (IN) ──
   deposits: {
-    getRoutes: async (currency: string) => {
-      const res = await atlasClient.get(`/gateway/routes`, { params: { currency } });
-      return res.data;
-    },
     create: async (data: { walletId: string; currency: string; amount: number }) => {
       const res = await atlasClient.post('/deposits', data);
       return res.data;
     },
-    getStatus: async (transactionId: string) => {
-      const res = await atlasClient.get(`/deposits/${transactionId}/status`);
-      return res.data;
-    },
   },
 
-  // SWAPS
+  // ── SWAPS ──
   swaps: {
-    getQuote: async (data: { fromCurrency: string; toCurrency: string; amount: number }) => {
-      const res = await atlasClient.get('/swaps/quote', { params: data });
-      return res.data;
-    },
     execute: async (data: { fromWalletId: string; toWalletId: string; amount: number }) => {
       const res = await atlasClient.post('/swaps', data);
       return res.data;
     },
   },
 
-  // WITHDRAWALS (OUT)
+  // ── WITHDRAWALS (OUT) ──
   withdrawals: {
-    getRoutes: async (currency: string) => {
-      const res = await atlasClient.get('/withdrawals/routes', { params: { currency } });
-      return res.data;
-    },
-    create: async (data: { walletId: string; amount: number; destinationAddress?: string; destinationBankDetails?: Record<string, string> }) => {
+    create: async (data: { walletId: string; amount: number; destinationAddress?: string }) => {
       const res = await atlasClient.post('/withdrawals', data);
       return res.data;
     },
   },
 
-  // KYC
+  // ── KYC ──
   kyc: {
     getProfile: async () => {
       const res = await atlasClient.get('/kyc/profile');
@@ -185,63 +176,18 @@ export const atlasApi = {
       const res = await atlasClient.post('/kyc/upgrade', data);
       return res.data;
     },
-    getStatus: async () => {
-      const res = await atlasClient.get('/kyc/status');
-      return res.data;
-    },
   },
 
-  // FEES
-  fees: {
-    getSchedule: async (tier?: string) => {
-      const params = tier ? { tier } : {};
-      const res = await atlasClient.get('/fees/schedule', { params });
-      return res.data;
-    },
-  },
-
-  // TICKETS (Admin/Operator)
-  tickets: {
-    list: async (params?: { status?: string; type?: string; page?: number }) => {
-      const res = await atlasClient.get('/tickets', { params });
-      return res.data;
-    },
-    getById: async (id: string) => {
-      const res = await atlasClient.get(`/tickets/${id}`);
-      return res.data;
-    },
-    update: async (id: string, data: { status: string; resolutionNotes?: string }) => {
-      const res = await atlasClient.patch(`/tickets/${id}`, data);
-      return res.data;
-    },
-  },
-
-  // ORGANIZATIONS (Admin)
-  organizations: {
-    list: async () => {
-      const res = await atlasClient.get('/organizations');
-      return res.data;
-    },
-    getById: async (id: string) => {
-      const res = await atlasClient.get(`/organizations/${id}`);
-      return res.data;
-    },
-  },
-
-  // USERS (Admin)
-  users: {
-    list: async (params?: { organizationId?: string; tier?: string; page?: number }) => {
-      const res = await atlasClient.get('/users', { params });
-      return res.data;
-    },
-    getById: async (id: string) => {
-      const res = await atlasClient.get(`/users/${id}`);
-      return res.data;
-    },
-  },
-
-  // MERCHANT
+  // ── MERCHANT: API Keys (S2S) ──
   merchant: {
+    getApiKeys: async () => {
+      const res = await atlasClient.get('/merchant/api-keys');
+      return res.data;
+    },
+    generateApiKey: async (data?: { storeName?: string }) => {
+      const res = await atlasClient.post('/merchant/api-keys/generate', data);
+      return res.data;
+    },
     getPaymentLinks: async () => {
       const res = await atlasClient.get('/merchant/links');
       return res.data;
@@ -250,12 +196,32 @@ export const atlasApi = {
       const res = await atlasClient.post('/merchant/links', data);
       return res.data;
     },
-    getApiKeys: async () => {
-      const res = await atlasClient.get('/merchant/api-keys');
+  },
+
+  // ── TICKETS (Admin/Operator) ──
+  tickets: {
+    list: async (params?: { status?: string; type?: string; page?: number }) => {
+      const res = await atlasClient.get('/tickets', { params });
       return res.data;
     },
-    getCheckouts: async () => {
-      const res = await atlasClient.get('/merchant/checkouts');
+    update: async (id: string, data: { status: string; resolutionNotes?: string }) => {
+      const res = await atlasClient.patch(`/tickets/${id}`, data);
+      return res.data;
+    },
+  },
+
+  // ── ORGANIZATIONS (Admin) ──
+  organizations: {
+    list: async () => {
+      const res = await atlasClient.get('/organizations');
+      return res.data;
+    },
+  },
+
+  // ── USERS (Admin) ──
+  users: {
+    list: async (params?: { page?: number }) => {
+      const res = await atlasClient.get('/users', { params });
       return res.data;
     },
   },

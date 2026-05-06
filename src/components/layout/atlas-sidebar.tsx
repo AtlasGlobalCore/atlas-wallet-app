@@ -2,8 +2,9 @@
 
 import React from 'react';
 import { useNavStore, type NavPage } from '@/stores/nav-store';
-import { useAuthStore, ROLE_LABELS } from '@/stores/auth-store';
+import { useAuthStore, ROLE_LABELS, ROLE_PERMISSIONS } from '@/stores/auth-store';
 import type { UserRole } from '@/types/atlas';
+import type { RolePermissions } from '@/types/atlas';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -44,22 +45,20 @@ interface NavItemDef {
   page: NavPage;
   label: string;
   icon: React.ElementType;
-  /** Which roles can see this item */
   roles: UserRole[];
-  /** Permission check – if defined, BOTH role AND permission must pass */
-  permission?: keyof import('@/types/atlas').RolePermissions;
+  permission?: keyof RolePermissions;
 }
 
 const NAV_ITEMS: NavItemDef[] = [
-  // Dashboard – all roles
+  // Dashboard – todos
   {
     page: 'dashboard',
     label: 'Painel',
     icon: LayoutDashboard,
-    roles: ['customer', 'merchant', 'super_merchant', 'admin', 'operator'],
+    roles: ['customer', 'merchant', 'super_merchant', 'operator'],
   },
 
-  // Wallet section
+  // Wallet section – Customer/Merchant
   {
     page: 'wallets',
     label: 'Carteiras',
@@ -92,11 +91,11 @@ const NAV_ITEMS: NavItemDef[] = [
     page: 'transactions',
     label: 'Transações',
     icon: Receipt,
-    roles: ['customer', 'merchant', 'super_merchant', 'admin', 'operator'],
+    roles: ['customer', 'merchant', 'super_merchant', 'operator'],
     permission: 'canViewTransactions',
   },
 
-  // KYC
+  // KYC – Customer/Merchant
   {
     page: 'kyc',
     label: 'Verificação KYC',
@@ -104,7 +103,7 @@ const NAV_ITEMS: NavItemDef[] = [
     roles: ['customer', 'merchant', 'super_merchant'],
   },
 
-  // Merchant section
+  // Merchant section – apenas Merchant/Super Merchant
   {
     page: 'merchant-links',
     label: 'Links de Pagamento',
@@ -127,39 +126,40 @@ const NAV_ITEMS: NavItemDef[] = [
     permission: 'canConfigureCheckouts',
   },
 
-  // Admin section
+  // Admin section – APENAS Operator (OrgOperator)
+  // Merchants (User) NÃO vêem "Aprovações" nem "Liquidez"
   {
     page: 'admin-tickets',
-    label: 'Tickets / Operações',
+    label: 'Aprovações',
     icon: Ticket,
-    roles: ['admin', 'operator'],
+    roles: ['operator'],
     permission: 'canManageTickets',
+  },
+  {
+    page: 'admin-fees',
+    label: 'Liquidez',
+    icon: Calculator,
+    roles: ['operator'],
+    permission: 'canConfigureFees',
   },
   {
     page: 'admin-users',
     label: 'Utilizadores',
     icon: Users,
-    roles: ['admin'],
+    roles: ['operator'],
     permission: 'canManageUsers',
-  },
-  {
-    page: 'admin-fees',
-    label: 'Taxas & Comissões',
-    icon: Calculator,
-    roles: ['admin'],
-    permission: 'canConfigureFees',
   },
   {
     page: 'admin-organizations',
     label: 'Organizações',
     icon: Building2,
-    roles: ['admin'],
+    roles: ['operator'],
     permission: 'canManageOrganizations',
   },
 ];
 
 // ---------------------------------------------------------------------------
-// Section grouping helpers
+// Section grouping
 // ---------------------------------------------------------------------------
 
 type SectionKey = 'dashboard' | 'wallet' | 'kyc' | 'merchant' | 'admin';
@@ -171,7 +171,7 @@ const SECTION_MAP: Record<SectionKey, NavPage[]> = {
   wallet: ['wallets', 'deposits', 'swaps', 'withdrawals', 'transactions'],
   kyc: ['kyc'],
   merchant: ['merchant-links', 'merchant-api-keys', 'merchant-checkouts'],
-  admin: ['admin-tickets', 'admin-users', 'admin-fees', 'admin-organizations'],
+  admin: ['admin-tickets', 'admin-fees', 'admin-users', 'admin-organizations'],
 };
 
 const SECTION_LABELS: Record<SectionKey, string> = {
@@ -188,21 +188,20 @@ const SECTION_LABELS: Record<SectionKey, string> = {
 
 function AtlasSidebar() {
   const { currentPage, sidebarOpen, setPage, toggleSidebar } = useNavStore();
-  const { user, logout, hasPermission } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const role = user?.role ?? 'customer';
 
-  // Filter items visible to this user
+  // RBAC: filtra itens baseado na role E permissão
   const visibleItems = React.useMemo(
     () =>
       NAV_ITEMS.filter((item) => {
         if (!item.roles.includes(role)) return false;
-        if (item.permission && !hasPermission(item.permission)) return false;
+        if (item.permission && !ROLE_PERMISSIONS[role]?.[item.permission]) return false;
         return true;
       }),
-    [role, hasPermission],
+    [role],
   );
 
-  // Build visible sections (only those that have visible items)
   const visibleSections = React.useMemo(() => {
     const visiblePages = new Set(visibleItems.map((i) => i.page));
     return SECTION_ORDER.filter((section) =>
@@ -210,7 +209,6 @@ function AtlasSidebar() {
     );
   }, [visibleItems]);
 
-  // Build lookup for quick access
   const itemLookup = React.useMemo(() => {
     const map = new Map<NavPage, NavItemDef>();
     for (const item of visibleItems) map.set(item.page, item);
@@ -222,7 +220,6 @@ function AtlasSidebar() {
     window.dispatchEvent(new CustomEvent('atlas:logout'));
   };
 
-  // User initials
   const initials = React.useMemo(() => {
     const name = user?.fullName || user?.nickname || '?';
     return name.slice(0, 2).toUpperCase();
@@ -235,14 +232,11 @@ function AtlasSidebar() {
         sidebarOpen ? 'w-64' : 'w-16',
       )}
     >
-      {/* ---- Header ---- */}
+      {/* Header */}
       <div className="flex items-center gap-3 px-4 h-16 shrink-0">
-        {/* Hexagon logo */}
         <div className="flex items-center justify-center size-8 shrink-0">
           <Hexagon className="size-8 text-emerald-500 fill-emerald-500/20" />
         </div>
-
-        {/* Name + version */}
         {sidebarOpen && (
           <div className="flex items-center gap-2 overflow-hidden">
             <span className="text-sm font-semibold text-zinc-100 whitespace-nowrap tracking-tight">
@@ -252,7 +246,7 @@ function AtlasSidebar() {
               variant="secondary"
               className="text-[10px] px-1.5 py-0 h-4 bg-zinc-800 text-zinc-400 border-zinc-700"
             >
-              v1.0
+              v2.0
             </Badge>
           </div>
         )}
@@ -260,7 +254,7 @@ function AtlasSidebar() {
 
       <Separator className="bg-zinc-800" />
 
-      {/* ---- Navigation ---- */}
+      {/* Navigation */}
       <ScrollArea className="flex-1 py-2">
         <nav className="flex flex-col gap-1 px-2" role="navigation" aria-label="Main navigation">
           {visibleSections.map((section) => {
@@ -273,7 +267,6 @@ function AtlasSidebar() {
 
             return (
               <div key={section} className="flex flex-col gap-1">
-                {/* Section label (only in expanded mode, skip for dashboard which has no label) */}
                 {sidebarOpen && SECTION_LABELS[section] && (
                   <div className="pt-3 pb-1 px-3">
                     <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
@@ -282,7 +275,6 @@ function AtlasSidebar() {
                   </div>
                 )}
 
-                {/* Nav items */}
                 {sectionItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = currentPage === item.page;
@@ -294,8 +286,8 @@ function AtlasSidebar() {
                       className={cn(
                         'group relative flex items-center gap-3 w-full rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150',
                         isActive
-                          ? 'bg-emerald-500/20 text-emerald-400 border-l-2 border-emerald-400 ml-0 pl-[10px]'
-                          : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent ml-0 pl-[10px]',
+                          ? 'bg-emerald-500/20 text-emerald-400 border-l-2 border-emerald-400 pl-[10px]'
+                          : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent pl-[10px]',
                       )}
                       aria-current={isActive ? 'page' : undefined}
                     >
@@ -313,7 +305,6 @@ function AtlasSidebar() {
                     </button>
                   );
 
-                  // In collapsed mode, wrap in tooltip
                   if (!sidebarOpen) {
                     return (
                       <Tooltip key={item.page} delayDuration={0}>
@@ -337,7 +328,7 @@ function AtlasSidebar() {
         </nav>
       </ScrollArea>
 
-      {/* ---- Collapse toggle ---- */}
+      {/* Collapse toggle */}
       <Separator className="bg-zinc-800" />
       <div className="flex justify-center py-2 shrink-0">
         <Button
@@ -345,7 +336,7 @@ function AtlasSidebar() {
           size="icon"
           onClick={toggleSidebar}
           className="h-7 w-7 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
-          aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          aria-label={sidebarOpen ? 'Fechar menu' : 'Abrir menu'}
         >
           {sidebarOpen ? (
             <ChevronLeft className="size-4" />
@@ -355,10 +346,9 @@ function AtlasSidebar() {
         </Button>
       </div>
 
-      {/* ---- Footer: user info + logout ---- */}
+      {/* Footer: user info + logout */}
       <div className="shrink-0 border-t border-zinc-800 px-3 py-3">
         {sidebarOpen ? (
-          /* Expanded: full user info */
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <Avatar className="size-9 shrink-0">
@@ -374,7 +364,7 @@ function AtlasSidebar() {
                   variant="outline"
                   className="text-[10px] px-1.5 py-0 h-4 w-fit border-zinc-700 text-zinc-400 bg-zinc-900"
                 >
-                  {ROLE_LABELS[role]}
+                  {ROLE_LABELS[role] || role}
                 </Badge>
               </div>
             </div>
@@ -389,7 +379,6 @@ function AtlasSidebar() {
             </Button>
           </div>
         ) : (
-          /* Collapsed: just avatar + logout tooltip */
           <div className="flex flex-col items-center gap-2">
             <Avatar className="size-8">
               <AvatarFallback className="bg-emerald-500/20 text-emerald-400 text-[10px] font-semibold">

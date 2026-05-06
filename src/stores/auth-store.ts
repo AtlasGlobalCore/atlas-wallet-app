@@ -1,12 +1,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type {
-  AuthUser,
   UserRole,
-  TierLevel,
   RolePermissions,
 } from '@/types/atlas';
-import { OrgRole } from '@/types/atlas';
 import {
   setStoredToken,
   setStoredUser,
@@ -16,8 +13,27 @@ import {
 
 // ============================================================
 // ATLAS CORE - Auth Store (Zustand)
-// Gestão de autenticação e RBAC com persistência segura
+// 
+// RBAC: A role é lida do payload de autenticação (JWT).
+// O backend distingue:
+//   - OrgOperator (role = "operator") → Admins/Equipa interna
+//   - User (role = "merchant") → Merchants/Lojistas
+//   - User sem org (role = "customer") → Customer/Seller
+//
+// NÃO há role 'admin' hardcoded. Tudo vem do backend.
 // ============================================================
+
+interface AuthUser {
+  id: string;
+  email?: string | null;
+  nickname?: string | null;
+  fullName?: string | null;
+  role: UserRole;
+  tier?: string;
+  organizationId?: string | null;
+  organizationName?: string | null;
+  avatar?: string | null;
+}
 
 interface AuthState {
   user: AuthUser | null;
@@ -25,17 +41,27 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
 
-  // Actions
   setAuth: (token: string, user: AuthUser) => void;
   updateUser: (user: Partial<AuthUser>) => void;
   logout: () => void;
   setLoading: (loading: boolean) => void;
-  hasPermission: (permission: keyof RolePermissions) => boolean;
-  getUserRole: () => UserRole;
-  getPermissions: () => RolePermissions;
+  isOperator: () => boolean;
+  isMerchant: () => boolean;
 }
 
-const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
+// ── Role Labels ──
+export const ROLE_LABELS: Record<UserRole, string> = {
+  customer: 'Customer',
+  merchant: 'Merchant',
+  super_merchant: 'Super Merchant',
+  operator: 'Operator',
+};
+
+// ── Role Permissions Matrix ──
+// Operadores (OrgOperator) veem: Dashboard, Transações, Tickets
+// Merchants (User + org) veem: Dashboard, Wallets, Depósitos, Swap, Levantamentos, KYC, Merchant tools
+// Customers (User sem org) veem: Dashboard, Wallets, Depósitos, Swap, Levantamentos, KYC
+export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
   customer: {
     canViewDashboard: true,
     canViewWallets: true,
@@ -87,7 +113,7 @@ const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canManageOrganizations: false,
     canManageUsers: false,
   },
-  admin: {
+  operator: {
     canViewDashboard: true,
     canViewWallets: true,
     canDeposit: false,
@@ -104,41 +130,7 @@ const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canManageOrganizations: true,
     canManageUsers: true,
   },
-  operator: {
-    canViewDashboard: true,
-    canViewWallets: true,
-    canDeposit: false,
-    canSwap: false,
-    canWithdraw: false,
-    canViewTransactions: true,
-    canGeneratePaymentLinks: false,
-    canManageApiKeys: false,
-    canConfigureCheckouts: false,
-    canViewSubClients: false,
-    canManageTickets: true,
-    canApproveKyc: false,
-    canConfigureFees: false,
-    canManageOrganizations: false,
-    canManageUsers: false,
-  },
 };
-
-const TIER_LABELS: Record<TierLevel, string> = {
-  TIER_0_UNVERIFIED: 'Não Verificado',
-  TIER_1_BASIC: 'Básico',
-  TIER_2_VERIFIED: 'Verificado',
-  TIER_3_CORPORATE: 'Corporate',
-};
-
-const ROLE_LABELS: Record<UserRole, string> = {
-  customer: 'Customer',
-  merchant: 'Merchant',
-  super_merchant: 'Super Merchant',
-  admin: 'Admin',
-  operator: 'Operator',
-};
-
-export { ROLE_PERMISSIONS, TIER_LABELS, ROLE_LABELS };
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -171,22 +163,14 @@ export const useAuthStore = create<AuthState>()(
 
       setLoading: (loading: boolean) => set({ isLoading: loading }),
 
-      hasPermission: (permission: keyof RolePermissions): boolean => {
+      isOperator: (): boolean => {
         const user = get().user;
-        if (!user) return false;
-        const perms = ROLE_PERMISSIONS[user.role];
-        return perms[permission] ?? false;
+        return user?.role === 'operator';
       },
 
-      getUserRole: (): UserRole => {
+      isMerchant: (): boolean => {
         const user = get().user;
-        return user?.role ?? 'customer';
-      },
-
-      getPermissions: (): RolePermissions => {
-        const user = get().user;
-        if (!user) return ROLE_PERMISSIONS.customer;
-        return ROLE_PERMISSIONS[user.role];
+        return user?.role === 'merchant' || user?.role === 'super_merchant' || user?.role === 'customer';
       },
     }),
     {
