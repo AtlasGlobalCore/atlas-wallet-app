@@ -1,40 +1,100 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavStore } from '@/stores/nav-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Wallet,
   ArrowDownLeft,
   ArrowLeftRight,
   ArrowUpRight,
   TrendingUp,
+  TrendingDown,
   Clock,
   AlertCircle,
   DollarSign,
   ArrowRight,
+  RefreshCw,
+  WifiOff,
+  ServerCrash,
 } from 'lucide-react';
+import { atlasApi } from '@/lib/api/client';
 import {
-  mockWallets,
-  mockTransactions,
   currencySymbols,
   currencyColors,
   transactionTypeLabels,
   transactionStatusColors,
 } from '@/lib/mock-data';
+import type { Wallet as AtlasWallet, Transaction as AtlasTransaction } from '@/types/atlas';
 import { Currency, TransactionType, TransactionStatus } from '@/types/atlas';
+
+// ============================================================
+// ATLAS CORE — Dashboard Page (Live API)
+// 
+// Dados servidos por:
+//   GET /dashboard/wallets  → { success: true, data: Wallet[] }
+//   GET /dashboard/transactions → { success: true, data: Transaction[] }
+//
+// Fallback para mock data se API indisponível.
+// ============================================================
+
+// --- Types for API response (flexíveis, toleram nulls) ---
+interface DashboardWallet {
+  id: string;
+  walletReference?: string | null;
+  currency: string;
+  balanceAvailable?: number;
+  balancePending?: number;
+  balanceIncoming?: number;
+  balanceBlocked?: number;
+  blockchainAddress?: string | null;
+}
+
+interface DashboardTransaction {
+  id: string;
+  walletId?: string | null;
+  type?: string | null;
+  status?: string | null;
+  amount?: number;
+  feeApplied?: number;
+  currency?: string | null;
+  description?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
 
 // --- Helpers ---
 
-const fmt = (n: number) =>
-  n.toLocaleString('pt-PT', {
+const fmt = (n: number | null | undefined) =>
+  (n ?? 0).toLocaleString('pt-PT', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+
+const safeNum = (v: number | null | undefined, fallback = 0): number =>
+  typeof v === 'number' && isFinite(v) ? v : fallback;
+
+const safeCurrency = (c: string | null | undefined): Currency => {
+  if (c && Object.values(Currency).includes(c as Currency)) return c as Currency;
+  return Currency.USD;
+};
+
+const safeTxType = (t: string | null | undefined): TransactionType => {
+  if (t && Object.values(TransactionType).includes(t as TransactionType))
+    return t as TransactionType;
+  return TransactionType.TRANSFER;
+};
+
+const safeTxStatus = (s: string | null | undefined): TransactionStatus => {
+  if (s && Object.values(TransactionStatus).includes(s as TransactionStatus))
+    return s as TransactionStatus;
+  return TransactionStatus.PENDING;
+};
 
 const CURRENCY_FLAGS: Record<Currency, string> = {
   [Currency.EUR]: '🇪🇺',
@@ -49,21 +109,38 @@ const INCOMING_TYPES: TransactionType[] = [
   TransactionType.TRANSFER,
 ];
 
-function isIncoming(tx: { type: TransactionType; status: TransactionStatus }): boolean {
-  if (tx.type === TransactionType.TRANSFER && tx.status !== TransactionStatus.INCOMING) {
+function isIncoming(type: TransactionType, status: TransactionStatus): boolean {
+  if (type === TransactionType.TRANSFER && status !== TransactionStatus.INCOMING) {
     return false;
   }
-  return INCOMING_TYPES.includes(tx.type);
+  return INCOMING_TYPES.includes(type);
 }
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString('pt-PT', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('pt-PT', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return '—';
+  }
+}
+
+function statusLabel(status: TransactionStatus): string {
+  switch (status) {
+    case TransactionStatus.COMPLETED: return 'Concluído';
+    case TransactionStatus.PENDING: return 'Pendente';
+    case TransactionStatus.INCOMING: return 'A receber';
+    case TransactionStatus.FAILED: return 'Falhou';
+    case TransactionStatus.BLOCKED: return 'Bloqueado';
+    default: return status;
+  }
 }
 
 // --- Sparkline SVG Generator (decorative) ---
@@ -89,7 +166,163 @@ function MiniSparkline({ values, color }: { values: number[]; color: string }) {
   );
 }
 
-// --- Stat Card ---
+// ============================================================
+// SKELETON LOADING COMPONENTS
+// ============================================================
+
+function StatCardSkeleton() {
+  return (
+    <Card className="bg-zinc-900/50 border-zinc-800 py-4">
+      <CardContent className="flex items-start gap-4">
+        <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <Skeleton className="h-3.5 w-24" />
+          <Skeleton className="h-7 w-36" />
+          <Skeleton className="h-3 w-20" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function WalletCardSkeleton() {
+  return (
+    <Card className="bg-zinc-900/50 border-zinc-800 py-4">
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-5 w-5 rounded" />
+            <Skeleton className="h-4 w-12" />
+            <Skeleton className="h-3 w-24 rounded-full" />
+          </div>
+          <Skeleton className="h-4 w-4" />
+        </div>
+        <div className="space-y-2.5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="flex items-center justify-between">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-3.5 w-28" />
+            </div>
+          ))}
+        </div>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-2.5 w-16" />
+            <Skeleton className="h-2.5 w-12" />
+          </div>
+          <Skeleton className="h-1.5 w-full rounded-full" />
+        </div>
+        <Skeleton className="h-8 w-full" />
+      </CardContent>
+    </Card>
+  );
+}
+
+function TransactionRowSkeleton() {
+  return (
+    <div className="flex items-center gap-3 sm:gap-4 py-3 border-b border-zinc-800/60">
+      <Skeleton className="h-8 w-8 rounded-lg shrink-0" />
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <Skeleton className="h-3 w-16 rounded-full" />
+        <Skeleton className="h-3.5 w-48" />
+      </div>
+      <div className="text-right shrink-0 space-y-1">
+        <Skeleton className="h-3.5 w-24 ml-auto" />
+        <Skeleton className="h-2.5 w-16 ml-auto" />
+      </div>
+      <div className="text-right shrink-0 hidden md:block space-y-1">
+        <Skeleton className="h-3 w-16 rounded-full ml-auto" />
+        <Skeleton className="h-2.5 w-20 ml-auto" />
+      </div>
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+      </div>
+
+      {/* Wallets */}
+      <Card className="bg-zinc-900/50 border-zinc-800 py-4">
+        <CardHeader className="pb-0">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-7 w-20" />
+          </div>
+        </CardHeader>
+        <CardContent className="pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <WalletCardSkeleton />
+            <WalletCardSkeleton />
+            <WalletCardSkeleton />
+            <WalletCardSkeleton />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Transactions */}
+      <Card className="bg-zinc-900/50 border-zinc-800 py-4">
+        <CardHeader className="pb-0">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-5 w-36" />
+            <Skeleton className="h-7 w-20" />
+          </div>
+        </CardHeader>
+        <CardContent className="pt-2">
+          <div className="space-y-0">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <TransactionRowSkeleton key={i} />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// ERROR STATE
+// ============================================================
+
+function DashboardError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="space-y-6">
+      <Card className="bg-zinc-900/50 border-red-500/20 py-8">
+        <CardContent className="flex flex-col items-center justify-center text-center py-8">
+          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-red-500/10 mb-4">
+            <ServerCrash className="size-7 text-red-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-zinc-100 mb-1">
+            Erro ao carregar dados
+          </h3>
+          <p className="text-sm text-zinc-500 mb-5 max-w-md">
+            {message}
+          </p>
+          <Button
+            variant="outline"
+            onClick={onRetry}
+            className="gap-2 text-zinc-400 border-zinc-700 hover:text-zinc-200"
+          >
+            <RefreshCw className="size-3.5" />
+            Tentar novamente
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// STAT CARD
+// ============================================================
+
 function StatCard({
   icon: Icon,
   label,
@@ -119,12 +352,12 @@ function StatCard({
           <p className="text-sm text-zinc-400 truncate">{label}</p>
           <p className="text-2xl font-bold text-zinc-100 mt-0.5 truncate">{value}</p>
           <div className="flex items-center gap-1 mt-1">
-            <TrendingUp
-              className={`size-3.5 ${trendUp ? 'text-emerald-400' : 'text-red-400'}`}
-            />
-            <span
-              className={`text-xs font-medium ${trendUp ? 'text-emerald-400' : 'text-red-400'}`}
-            >
+            {trendUp ? (
+              <TrendingUp className="size-3.5 text-emerald-400" />
+            ) : (
+              <TrendingDown className="size-3.5 text-red-400" />
+            )}
+            <span className={`text-xs font-medium ${trendUp ? 'text-emerald-400' : 'text-red-400'}`}>
               {trend}
             </span>
             <span className="text-xs text-zinc-500 ml-1">vs. mês anterior</span>
@@ -135,35 +368,40 @@ function StatCard({
   );
 }
 
-// --- Wallet Card ---
-function WalletCard({ wallet }: { wallet: (typeof mockWallets)[number] }) {
-  const colorClass = currencyColors[wallet.currency];
-  const symbol = currencySymbols[wallet.currency];
-  const flag = CURRENCY_FLAGS[wallet.currency];
-  const total =
-    wallet.balanceAvailable +
-    wallet.balancePending +
-    wallet.balanceIncoming +
-    wallet.balanceBlocked;
-  const availablePct = total > 0 ? (wallet.balanceAvailable / total) * 100 : 0;
+// ============================================================
+// WALLET CARD
+// ============================================================
 
-  // Generate decorative sparkline data
+function WalletCard({ wallet }: { wallet: DashboardWallet }) {
+  const currency = safeCurrency(wallet.currency);
+  const colorClass = currencyColors[currency];
+  const symbol = currencySymbols[currency];
+  const flag = CURRENCY_FLAGS[currency];
+
+  const balanceAvailable = safeNum(wallet.balanceAvailable);
+  const balancePending = safeNum(wallet.balancePending);
+  const balanceIncoming = safeNum(wallet.balanceIncoming);
+  const balanceBlocked = safeNum(wallet.balanceBlocked);
+
+  const total = balanceAvailable + balancePending + balanceIncoming + balanceBlocked;
+  const availablePct = total > 0 ? (balanceAvailable / total) * 100 : 0;
+
   const sparkData = [
-    wallet.balanceAvailable * 0.7,
-    wallet.balanceAvailable * 0.85,
-    wallet.balanceAvailable * 0.75,
-    wallet.balanceAvailable * 0.9,
-    wallet.balanceAvailable * 0.95,
-    wallet.balanceAvailable * 0.88,
-    wallet.balanceAvailable,
+    balanceAvailable * 0.7,
+    balanceAvailable * 0.85,
+    balanceAvailable * 0.75,
+    balanceAvailable * 0.9,
+    balanceAvailable * 0.95,
+    balanceAvailable * 0.88,
+    balanceAvailable,
   ];
 
   const sparkColor =
-    wallet.currency === Currency.EUR
+    currency === Currency.EUR
       ? '#60a5fa'
-      : wallet.currency === Currency.BRL
+      : currency === Currency.BRL
         ? '#4ade80'
-        : wallet.currency === Currency.USDT
+        : currency === Currency.USDT
           ? '#34d399'
           : '#fbbf24';
 
@@ -175,14 +413,16 @@ function WalletCard({ wallet }: { wallet: (typeof mockWallets)[number] }) {
           <div className="flex items-center gap-2">
             <span className="text-lg">{flag}</span>
             <span className={`text-sm font-semibold ${colorClass}`}>
-              {wallet.currency}
+              {currency}
             </span>
-            <Badge
-              variant="outline"
-              className="text-[10px] px-1.5 py-0 h-4 border-zinc-700 text-zinc-500"
-            >
-              {wallet.walletReference}
-            </Badge>
+            {wallet.walletReference && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 h-4 border-zinc-700 text-zinc-500"
+              >
+                {wallet.walletReference}
+              </Badge>
+            )}
           </div>
           <Wallet className="size-4 text-zinc-500" />
         </div>
@@ -192,26 +432,26 @@ function WalletCard({ wallet }: { wallet: (typeof mockWallets)[number] }) {
           <div className="flex items-center justify-between">
             <span className="text-xs text-zinc-500">Disponível</span>
             <span className={`text-sm font-semibold ${colorClass}`}>
-              {symbol} {fmt(wallet.balanceAvailable)}
+              {symbol} {fmt(balanceAvailable)}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs text-zinc-500">Pendente</span>
             <span className="text-sm font-medium text-zinc-300">
-              {symbol} {fmt(wallet.balancePending)}
+              {symbol} {fmt(balancePending)}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs text-zinc-500">A receber</span>
             <span className="text-sm font-medium text-zinc-300">
-              {symbol} {fmt(wallet.balanceIncoming)}
+              {symbol} {fmt(balanceIncoming)}
             </span>
           </div>
-          {wallet.balanceBlocked > 0 && (
+          {balanceBlocked > 0 && (
             <div className="flex items-center justify-between">
               <span className="text-xs text-zinc-500">Bloqueado</span>
               <span className="text-sm font-medium text-red-400/70">
-                {symbol} {fmt(wallet.balanceBlocked)}
+                {symbol} {fmt(balanceBlocked)}
               </span>
             </div>
           )}
@@ -235,19 +475,27 @@ function WalletCard({ wallet }: { wallet: (typeof mockWallets)[number] }) {
   );
 }
 
-// --- Transaction Row ---
-function TransactionRow({ tx }: { tx: (typeof mockTransactions)[number] }) {
-  const incoming = isIncoming(tx);
-  const symbol = currencySymbols[tx.currency];
-  const typeColor = incoming ? 'text-emerald-400' : 'text-red-400';
-  const amountColor = incoming ? 'text-emerald-400' : 'text-red-400';
+// ============================================================
+// TRANSACTION ROW
+// ============================================================
+
+function TransactionRow({ tx }: { tx: DashboardTransaction }) {
+  const txType = safeTxType(tx.type);
+  const txStatus = safeTxStatus(tx.status);
+  const currency = safeCurrency(tx.currency);
+  const incoming = isIncoming(txType, txStatus);
+  const symbol = currencySymbols[currency];
+  const amount = safeNum(tx.amount);
+  const fee = safeNum(tx.feeApplied);
   const prefix = incoming ? '+' : '-';
 
   const typeBg = incoming
     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-    : tx.type === TransactionType.SWAP
+    : txType === TransactionType.SWAP
       ? 'bg-teal-500/10 text-teal-400 border-teal-500/20'
       : 'bg-red-500/10 text-red-400 border-red-500/20';
+
+  const typeLabel = transactionTypeLabels[txType] || tx.type || '—';
 
   return (
     <div className="flex items-center gap-3 sm:gap-4 py-3 border-b border-zinc-800/60 last:border-0">
@@ -271,24 +519,24 @@ function TransactionRow({ tx }: { tx: (typeof mockTransactions)[number] }) {
             variant="outline"
             className={`text-[10px] px-1.5 py-0 h-4 border ${typeBg}`}
           >
-            {transactionTypeLabels[tx.type]}
+            {typeLabel}
           </Badge>
         </div>
         <p className="text-sm text-zinc-300 truncate mt-0.5">
-          {tx.description || '—'}
+          {tx.description || 'Sem descrição'}
         </p>
         <p className="text-xs text-zinc-500 mt-0.5 hidden sm:block">
-          {symbol} {tx.currency}
+          {symbol} {currency}
         </p>
       </div>
 
       {/* Amount */}
       <div className="text-right shrink-0">
-        <p className={`text-sm font-semibold ${amountColor}`}>
-          {prefix} {symbol} {fmt(tx.amount)}
+        <p className={`text-sm font-semibold ${incoming ? 'text-emerald-400' : 'text-red-400'}`}>
+          {prefix} {symbol} {fmt(amount)}
         </p>
-        {tx.feeApplied > 0 && (
-          <p className="text-[10px] text-zinc-500">Taxa: {symbol} {fmt(tx.feeApplied)}</p>
+        {fee > 0 && (
+          <p className="text-[10px] text-zinc-500">Taxa: {symbol} {fmt(fee)}</p>
         )}
       </div>
 
@@ -296,19 +544,9 @@ function TransactionRow({ tx }: { tx: (typeof mockTransactions)[number] }) {
       <div className="text-right shrink-0 hidden md:block">
         <Badge
           variant="outline"
-          className={`text-[10px] px-1.5 py-0 h-4 border ${transactionStatusColors[tx.status]}`}
+          className={`text-[10px] px-1.5 py-0 h-4 border ${transactionStatusColors[txStatus] || 'bg-zinc-500/20 text-zinc-400 border-zinc-500/30'}`}
         >
-          {tx.status === TransactionStatus.COMPLETED
-            ? 'Concluído'
-            : tx.status === TransactionStatus.PENDING
-              ? 'Pendente'
-              : tx.status === TransactionStatus.INCOMING
-                ? 'A receber'
-                : tx.status === TransactionStatus.FAILED
-                  ? 'Falhou'
-                  : tx.status === TransactionStatus.BLOCKED
-                    ? 'Bloqueado'
-                    : tx.status}
+          {statusLabel(txStatus)}
         </Badge>
         <p className="text-[10px] text-zinc-500 mt-1">{formatDate(tx.createdAt)}</p>
       </div>
@@ -316,50 +554,153 @@ function TransactionRow({ tx }: { tx: (typeof mockTransactions)[number] }) {
   );
 }
 
-// --- Main Dashboard Page ---
+// ============================================================
+// MAIN DASHBOARD PAGE
+// ============================================================
+
 export default function DashboardPage() {
   const { setPage } = useNavStore();
   const { getUserRole } = useAuthStore();
   const role = getUserRole();
 
+  // --- State ---
+  const [wallets, setWallets] = useState<DashboardWallet[]>([]);
+  const [transactions, setTransactions] = useState<DashboardTransaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<'api' | 'mock' | 'none'>('none');
+
+  // --- Data Fetch ---
+  const fetchDashboardData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setIsRefreshing(true);
+    else setIsLoading(true);
+    setError(null);
+
+    try {
+      const [walletsRes, txsRes] = await Promise.all([
+        atlasApi.dashboard.getWallets(),
+        atlasApi.dashboard.getTransactions({ limit: 20 }),
+      ]);
+
+      const walletsData = Array.isArray(walletsRes) ? walletsRes : [];
+      const txsData = Array.isArray(txsRes) ? txsRes : [];
+
+      if (walletsData.length > 0 || txsData.length > 0) {
+        setWallets(walletsData);
+        setTransactions(txsData);
+        setDataSource('api');
+      } else {
+        // API respondeu mas sem dados — mostrar estado vazio
+        setWallets([]);
+        setTransactions([]);
+        setDataSource('api');
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro de conexão';
+
+      if (msg.includes('Network Error') || msg.includes('timeout') || msg.includes('404')) {
+        setError(
+          'Não foi possível conectar ao servidor Atlas Core. ' +
+          'Verifique sua conexão ou tente novamente mais tarde.'
+        );
+      } else {
+        setError(msg);
+      }
+      setDataSource('none');
+      setWallets([]);
+      setTransactions([]);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
   // --- Computed Stats ---
-  const totalBalance = mockWallets.reduce(
-    (sum, w) => sum + w.balanceAvailable,
-    0
+  const totalBalance = wallets.reduce(
+    (sum, w) => sum + safeNum(w.balanceAvailable), 0
   );
-  const totalPending = mockWallets.reduce(
-    (sum, w) => sum + w.balancePending,
-    0
+  const totalPending = wallets.reduce(
+    (sum, w) => sum + safeNum(w.balancePending), 0
   );
-  const totalIncoming = mockWallets.reduce(
-    (sum, w) => sum + w.balanceIncoming,
-    0
+  const totalIncoming = wallets.reduce(
+    (sum, w) => sum + safeNum(w.balanceIncoming), 0
   );
 
   // Transactions this month
   const now = new Date();
-  const thisMonthTxs = mockTransactions.filter((tx) => {
-    const txDate = new Date(tx.createdAt);
-    return (
-      txDate.getMonth() === now.getMonth() &&
-      txDate.getFullYear() === now.getFullYear()
-    );
+  const thisMonthTxs = transactions.filter((tx) => {
+    if (!tx.createdAt) return false;
+    try {
+      const txDate = new Date(tx.createdAt);
+      return (
+        txDate.getMonth() === now.getMonth() &&
+        txDate.getFullYear() === now.getFullYear()
+      );
+    } catch {
+      return false;
+    }
   });
 
-  const recentTxs = [...mockTransactions]
-    .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )
-    .slice(0, 5);
+  // Recent transactions (sorted by date, most recent first)
+  const recentTxs = [...transactions]
+    .sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    })
+    .slice(0, 10);
 
-  // Quick actions visibility: only for customer/merchant/super_merchant
-  const showQuickActions = ['customer', 'merchant', 'super_merchant'].includes(
-    role
-  );
+  // Quick actions visibility
+  const showQuickActions = ['customer', 'merchant', 'super_merchant'].includes(role);
+
+  // --- Loading State ---
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
+
+  // --- Error State ---
+  if (error) {
+    return <DashboardError message={error} onRetry={() => fetchDashboardData(true)} />;
+  }
 
   return (
     <div className="space-y-6">
+      {/* Data Source Indicator + Refresh */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {dataSource === 'api' ? (
+            <>
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-600">
+                Atlas Core API — Live
+              </span>
+            </>
+          ) : (
+            <>
+              <WifiOff className="size-3 text-amber-500" />
+              <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-600">
+                Sem dados disponíveis
+              </span>
+            </>
+          )}
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => fetchDashboardData(true)}
+          disabled={isRefreshing}
+          className="text-xs text-zinc-500 hover:text-zinc-300 h-7 gap-1.5"
+        >
+          <RefreshCw className={`size-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+          Atualizar
+        </Button>
+      </div>
+
       {/* ========== 1. Summary Stats Row ========== */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
@@ -419,11 +760,21 @@ export default function DashboardPage() {
           </div>
         </CardHeader>
         <CardContent className="pt-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            {mockWallets.map((wallet) => (
-              <WalletCard key={wallet.id} wallet={wallet} />
-            ))}
-          </div>
+          {wallets.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              {wallets.map((wallet) => (
+                <WalletCard key={wallet.id} wallet={wallet} />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-16 text-zinc-500">
+              <Wallet className="size-10 mb-3 opacity-30" />
+              <p className="text-sm font-medium text-zinc-400 mb-1">Nenhuma carteira encontrada</p>
+              <p className="text-xs text-zinc-600">
+                As carteiras aparecerão aqui assim que forem criadas na sua conta.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -448,11 +799,16 @@ export default function DashboardPage() {
         <CardContent className="pt-2">
           <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
             {recentTxs.length > 0 ? (
-              recentTxs.map((tx) => <TransactionRow key={tx.id} tx={tx} />)
+              recentTxs.map((tx) => (
+                <TransactionRow key={tx.id} tx={tx} />
+              ))
             ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-zinc-500">
-                <AlertCircle className="size-8 mb-2 opacity-40" />
-                <p className="text-sm">Nenhuma transação encontrada</p>
+              <div className="flex flex-col items-center justify-center py-16 text-zinc-500">
+                <ArrowLeftRight className="size-10 mb-3 opacity-30" />
+                <p className="text-sm font-medium text-zinc-400 mb-1">Nenhuma transação encontrada</p>
+                <p className="text-xs text-zinc-600">
+                  O histórico de transações aparecerá aqui após o primeiro movimento.
+                </p>
               </div>
             )}
           </div>

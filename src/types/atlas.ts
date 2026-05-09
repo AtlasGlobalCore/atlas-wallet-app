@@ -209,6 +209,14 @@ export interface ApiError {
   details?: Record<string, unknown>;
 }
 
+// --- ATLAS CORE API WRAPPER ---
+// O backend devolve respostas no formato { success: boolean, data: T }
+export interface AtlasApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;

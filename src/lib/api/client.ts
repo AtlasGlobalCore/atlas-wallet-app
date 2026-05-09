@@ -225,6 +225,22 @@ export const atlasApi = {
       return res.data;
     },
   },
+
+  // ── DASHBOARD (dados agregados) ──
+  // O backend devolve { success: boolean, data: [...] }
+  dashboard: {
+    getWallets: async () => {
+      const res = await atlasClient.get('/dashboard/wallets');
+      // Desempacotar: res.data = { success, data }
+      const payload = res.data;
+      return payload?.success ? payload.data : payload;
+    },
+    getTransactions: async (params?: { limit?: number }) => {
+      const res = await atlasClient.get('/dashboard/transactions', { params });
+      const payload = res.data;
+      return payload?.success ? payload.data : payload;
+    },
+  },
 };
 
 export default atlasClient;

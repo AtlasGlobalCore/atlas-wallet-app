@@ -64,7 +64,10 @@ export default function Home() {
   const { isAuthenticated } = useAuthStore();
   const { currentPage, sidebarOpen, toggleSidebar, setPage } = useNavStore();
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: client hydration guard
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const onAuth = () => setPage('dashboard');
