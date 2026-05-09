@@ -1,16 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNavStore } from '@/stores/nav-store';
+import { PageErrorBoundary } from '@/components/ui/page-error-boundary';
 import AtlasLanding from '@/components/layout/atlas-landing';
 import AtlasSidebar from '@/components/layout/atlas-sidebar';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Menu, Loader2 } from 'lucide-react';
-
-// Page components
 import DashboardPage from '@/components/dashboard/dashboard-page';
 import WalletsPage from '@/components/wallet/wallets-page';
 import DepositsPage from '@/components/wallet/deposits-page';
@@ -25,8 +20,12 @@ import AdminOrganizationsPage from '@/components/dashboard/admin-organizations-p
 import MerchantLinksPage from '@/components/dashboard/merchant-links-page';
 import MerchantApiKeysPage from '@/components/dashboard/merchant-api-keys-page';
 import MerchantCheckoutsPage from '@/components/dashboard/merchant-checkouts-page';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Menu, Loader2 } from 'lucide-react';
 
-const PAGE_COMPONENTS: Record<string, React.ComponentType> = {
+const PAGES: Record<string, React.ComponentType> = {
   dashboard: DashboardPage,
   wallets: WalletsPage,
   deposits: DepositsPage,
@@ -43,7 +42,7 @@ const PAGE_COMPONENTS: Record<string, React.ComponentType> = {
   'merchant-checkouts': MerchantCheckoutsPage,
 };
 
-const PAGE_TITLES: Record<string, string> = {
+const TITLES: Record<string, string> = {
   dashboard: 'Painel de Controlo',
   wallets: 'Carteiras',
   deposits: 'Depositar',
@@ -60,92 +59,61 @@ const PAGE_TITLES: Record<string, string> = {
   'merchant-checkouts': 'Checkouts',
 };
 
-function useHydrated() {
-  const [hydrated, setHydrated] = React.useState(false);
-  React.useEffect(() => {
-    const onMount = () => setHydrated(true);
-    onMount();
-  }, []);
-  return hydrated;
-}
-
 export default function Home() {
+  const [mounted, setMounted] = useState(false);
   const { isAuthenticated } = useAuthStore();
   const { currentPage, sidebarOpen, toggleSidebar, setPage } = useNavStore();
-  const hydrated = useHydrated();
 
-  // Listen for auth events
+  useEffect(() => { setMounted(true); }, []);
+
   useEffect(() => {
-    const handleAuth = () => setPage('dashboard');
-    const handleLogout = () => setPage('dashboard');
-    window.addEventListener('atlas:authenticated', handleAuth);
-    window.addEventListener('atlas:logout', handleLogout);
+    const onAuth = () => setPage('dashboard');
+    const onLogout = () => setPage('dashboard');
+    window.addEventListener('atlas:authenticated', onAuth);
+    window.addEventListener('atlas:logout', onLogout);
     return () => {
-      window.removeEventListener('atlas:authenticated', handleAuth);
-      window.removeEventListener('atlas:logout', handleLogout);
+      window.removeEventListener('atlas:authenticated', onAuth);
+      window.removeEventListener('atlas:logout', onLogout);
     };
   }, [setPage]);
 
-  // Loading during hydration
-  if (!hydrated) {
+  if (!mounted) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#0a0f0d]">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-          <span className="text-sm text-zinc-500">A carregar Atlas Core...</span>
-        </div>
+      <div className="flex h-screen items-center justify-center bg-[#070b0a]">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
       </div>
     );
   }
 
-  // Not authenticated → show landing page
   if (!isAuthenticated) {
     return <AtlasLanding />;
   }
 
-  // Authenticated → show dashboard layout
-  const PageComponent = PAGE_COMPONENTS[currentPage] || DashboardPage;
-  const pageTitle = PAGE_TITLES[currentPage] || 'Painel';
+  const Page = PAGES[currentPage] || DashboardPage;
+  const title = TITLES[currentPage] || 'Painel';
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* Sidebar */}
       <AtlasSidebar />
-
-      {/* Main content area */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top bar */}
         <header className="flex items-center justify-between h-14 px-4 sm:px-6 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             {!sidebarOpen && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleSidebar}
-                className="h-8 w-8 text-zinc-400 hover:text-zinc-200 shrink-0"
-                aria-label="Abrir menu"
-              >
+              <Button variant="ghost" size="icon" onClick={toggleSidebar} className="h-8 w-8 text-zinc-400 hover:text-zinc-200 shrink-0" aria-label="Abrir menu">
                 <Menu className="size-4" />
               </Button>
             )}
-            <h1 className="text-base font-semibold text-zinc-100 truncate">
-              {pageTitle}
-            </h1>
+            <h1 className="text-base font-semibold text-zinc-100 truncate">{title}</h1>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className="hidden sm:inline-flex text-[10px] px-2 py-0 h-5 border-zinc-700 text-zinc-500 bg-zinc-900"
-            >
-              Atlas Core v1.0
-            </Badge>
-          </div>
+          <Badge variant="outline" className="hidden sm:inline-flex text-[10px] px-2 py-0 h-5 border-zinc-700 text-zinc-500 bg-zinc-900">
+            Atlas Core v1.0
+          </Badge>
         </header>
-
-        {/* Page content */}
         <ScrollArea className="flex-1">
           <div className="p-4 sm:p-6 lg:p-8">
-            <PageComponent />
+            <PageErrorBoundary>
+              <Page />
+            </PageErrorBoundary>
           </div>
         </ScrollArea>
       </main>

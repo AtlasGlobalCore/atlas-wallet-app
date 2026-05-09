@@ -1,7 +1,15 @@
 {
-  "name": "nextjs_tailwind_shadcn_ts",
-  "version": "0.2.0",
+  "name": "atlas-core-banking",
+  "version": "2.0.0",
   "private": true,
+  "description": "Atlas Core Banking — Plataforma institucional Web3 para gestão de wallets multi-moeda, settlement automatizado e operações cross-border",
+  "author": "Atlas Global Core",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AtlasGlobalCore/atlas-wallet-app.git"
+  },
+  "homepage": "https://atlascore.io",
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",

@@ -1,0 +1,19 @@
+{
+  "name": "Atlas Core Banking",
+  "short_name": "Atlas Core",
+  "description": "Centro de Comando Banking & Web3",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070b0a",
+  "theme_color": "#070b0a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "business"]
+}

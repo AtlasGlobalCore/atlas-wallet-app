@@ -210,6 +210,109 @@
   animation: gradient-x 8s ease infinite;
 }
 
+/* ── Neon Grid Background ── */
+
+.atlas-grid-bg {
+  position: relative;
+  overflow: hidden;
+}
+
+.atlas-grid-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(16, 185, 129, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.08) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse at 50% 50%, black 30%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, black 30%, transparent 80%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.atlas-grid-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(16, 185, 129, 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.15) 1px, transparent 1px);
+  background-size: 60px 60px;
+  background-position: 0 0;
+  mask-image: linear-gradient(to bottom, transparent 0%, black 30%, black 60%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 30%, black 60%, transparent 100%);
+  animation: neon-flow 8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+}
+
+@keyframes neon-flow {
+  0% {
+    opacity: 0.1;
+    background-position: 0 0;
+  }
+  20% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.3;
+    background-position: 120px 120px;
+  }
+  80% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 0.1;
+    background-position: 0 0;
+  }
+}
+
+/* Neon line sweep across grid */
+.neon-sweep {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.neon-sweep::before {
+  content: '';
+  position: absolute;
+  left: -100%;
+  top: 0;
+  width: 40%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.4), rgba(20, 184, 166, 0.6), rgba(16, 185, 129, 0.4), transparent);
+  animation: sweep-horizontal 12s linear infinite;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.2), 0 0 40px rgba(16, 185, 129, 0.1);
+}
+
+.neon-sweep::after {
+  content: '';
+  position: absolute;
+  top: -100%;
+  left: 0;
+  height: 40%;
+  width: 2px;
+  background: linear-gradient(180deg, transparent, rgba(16, 185, 129, 0.3), rgba(20, 184, 166, 0.5), rgba(16, 185, 129, 0.3), transparent);
+  animation: sweep-vertical 16s linear infinite;
+  animation-delay: 4s;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.15), 0 0 40px rgba(16, 185, 129, 0.08);
+}
+
+@keyframes sweep-horizontal {
+  0% { left: -40%; top: 20%; }
+  100% { left: 100%; top: 60%; }
+}
+
+@keyframes sweep-vertical {
+  0% { top: -40%; left: 30%; }
+  100% { top: 100%; left: 70%; }
+}
+
 /* Custom scrollbar for dark theme */
 ::-webkit-scrollbar {
   width: 6px;

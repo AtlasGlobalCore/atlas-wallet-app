@@ -22,6 +22,11 @@ import {
   Layers,
   Fingerprint,
   AlertCircle,
+  Menu,
+  X,
+  FileText,
+  HelpCircle,
+  Activity,
 } from 'lucide-react';
 import CryptoCards from '@/components/shared/crypto-cards';
 import TradingViewWidget from '@/components/shared/tradingview-widget';
@@ -75,11 +80,11 @@ const FEATURES = [
   { icon: Fingerprint, title: 'Infraestrutura Segura', desc: 'Ledger institucional com encriptação de ponta a ponta' },
 ];
 
-const STATS = [
-  { value: '$2.4B+', label: 'Volume Processado' },
-  { value: '150K+', label: 'Transações/Mês' },
-  { value: '99.9%', label: 'Uptime' },
-  { value: '< 2s', label: 'Tempo de Settlement' },
+const NAV_LINKS = [
+  { label: 'Plataforma', href: '#features' },
+  { label: 'Mercado', href: '#market' },
+  { label: 'Documentação', href: '#' },
+  { label: 'Suporte', href: '#' },
 ];
 
 export default function AtlasLanding() {
@@ -90,6 +95,7 @@ export default function AtlasLanding() {
   const [regPassword, setRegPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const { setAuth, isLoading, setLoading } = useAuthStore();
 
@@ -106,7 +112,6 @@ export default function AtlasLanding() {
           password: loginPassword,
         });
 
-        // O backend devolve { token, user: { id, role, ... } }
         const token = response?.token || response?.access_token;
         const userData = response?.user || response;
 
@@ -134,7 +139,6 @@ export default function AtlasLanding() {
       e.preventDefault();
       setLoading(true);
       try {
-        // TODO: Adicionar rota de registro quando disponível no backend
         setLoginError('Registo brevemente disponível via API.');
       } catch {
         setLoginError('Erro ao criar conta');
@@ -158,81 +162,95 @@ export default function AtlasLanding() {
 
   return (
     <div className="relative flex flex-col min-h-screen w-full overflow-hidden bg-[#070b0a]">
-      {/* Background Effects */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.025]"
-        style={{
-          backgroundImage: 'linear-gradient(rgba(16,185,129,0.5) 1px,transparent 1px),linear-gradient(90deg,rgba(16,185,129,0.5) 1px,transparent 1px)',
-          backgroundSize: '48px 48px',
-        }}
-      />
+      {/* === NEON GRID BACKGROUND === */}
+      <div className="atlas-grid-bg" />
+      <div className="neon-sweep" />
+
+      {/* Ambient glow orbs */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute left-[10%] top-[20%] h-[700px] w-[700px] rounded-full bg-emerald-600/[0.06] blur-[150px] animate-pulse-glow" />
         <div className="absolute right-[15%] bottom-[10%] h-[500px] w-[500px] rounded-full bg-teal-500/[0.04] blur-[120px] animate-pulse-glow" style={{ animationDelay: '2s' }} />
         <div className="absolute left-[50%] top-[60%] h-[400px] w-[400px] rounded-full bg-emerald-400/[0.03] blur-[100px] animate-pulse-glow" style={{ animationDelay: '4s' }} />
       </div>
 
-      {/* Header */}
-      <header className="relative z-10 flex items-center justify-between px-4 sm:px-8 h-14 shrink-0 border-b border-zinc-800/30 bg-[#070b0a]/80 backdrop-blur-md">
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center w-8 h-8">
-            <Hexagon className="w-7 h-7 text-emerald-500 fill-emerald-500/15" />
+      {/* === NAVIGATION BAR === */}
+      <header className="relative z-20 flex items-center justify-between px-4 sm:px-6 lg:px-8 h-16 shrink-0 border-b border-zinc-800/30 bg-[#070b0a]/80 backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center w-9 h-9">
+            <Hexagon className="w-8 h-8 text-emerald-500 fill-emerald-500/15" />
           </div>
-          <span className="text-sm font-bold text-zinc-100 tracking-tight">Atlas Core</span>
-          <span className="text-[9px] font-medium uppercase tracking-widest text-emerald-500/60 bg-emerald-500/10 px-1.5 py-0.5 rounded">Banking</span>
+          <span className="text-base font-bold text-zinc-100 tracking-tight">Atlas Core</span>
+          <span className="hidden sm:inline-flex text-[9px] font-medium uppercase tracking-widest text-emerald-500/60 bg-emerald-500/10 px-2 py-0.5 rounded">
+            Banking
+          </span>
         </div>
-        <div className="hidden sm:flex items-center gap-6">
-          {STATS.map((stat) => (
-            <div key={stat.label} className="flex flex-col items-end">
-              <span className="text-xs font-bold text-zinc-300 tabular-nums">{stat.value}</span>
-              <span className="text-[9px] text-zinc-600 uppercase tracking-wider">{stat.label}</span>
-            </div>
+
+        {/* Desktop Nav Links */}
+        <nav className="hidden md:flex items-center gap-1">
+          {NAV_LINKS.map((link) => (
+            <a
+              key={link.label}
+              href={link.href}
+              className="px-3 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-100 transition-colors rounded-lg hover:bg-zinc-800/40"
+            >
+              {link.label}
+            </a>
           ))}
+        </nav>
+
+        <div className="flex items-center gap-3">
+          {/* Status badge */}
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+            <Activity className="w-3 h-3 text-emerald-400" />
+            <span className="text-[10px] font-medium text-emerald-300">Online</span>
+          </div>
+
+          {/* Mobile menu toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden h-8 w-8 text-zinc-400 hover:text-zinc-200"
+            aria-label="Menu"
+          >
+            {mobileMenuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+          </Button>
         </div>
       </header>
 
-      {/* Main Content */}
-      <div className="relative z-10 flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
-        {/* LEFT: Crypto Exchange Data */}
-        <div className="lg:flex-1 flex flex-col min-h-0 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-          <div className="mb-4 animate-slide-in-left">
-            <div className="flex items-center gap-2 mb-1">
-              <TrendingUp className="w-4 h-4 text-emerald-400" />
-              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-400/80">Mercado Ao Vivo</span>
-            </div>
-            <h2 className="text-lg sm:text-xl font-bold text-zinc-100">Crypto Markets</h2>
-          </div>
-
-          <div className="animate-slide-in-left" style={{ animationDelay: '0.1s' }}>
-            <CryptoCards />
-          </div>
-
-          <div className="mt-6 rounded-xl border border-zinc-800/40 bg-zinc-900/30 overflow-hidden animate-slide-in-left" style={{ animationDelay: '0.3s' }}>
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800/40">
-              <Globe className="w-3.5 h-3.5 text-emerald-400/60" />
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">TradingView — Market Overview</span>
-            </div>
-            <div className="h-[320px] sm:h-[380px]">
-              <TradingViewWidget type="market-overview" height={380} />
-            </div>
-          </div>
-
-          <div className="mt-6 grid grid-cols-2 gap-3 animate-slide-in-left" style={{ animationDelay: '0.5s' }}>
-            {FEATURES.map((feat) => (
-              <div key={feat.title} className="group flex flex-col gap-2 p-3.5 rounded-xl border border-zinc-800/30 bg-zinc-900/20 transition-all hover:border-emerald-500/20 hover:bg-zinc-900/40">
-                <feat.icon className="w-4 h-4 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
-                <span className="text-xs font-semibold text-zinc-200">{feat.title}</span>
-                <span className="text-[10px] leading-relaxed text-zinc-500">{feat.desc}</span>
-              </div>
+      {/* Mobile Navigation Menu */}
+      {mobileMenuOpen && (
+        <nav className="relative z-20 md:hidden border-b border-zinc-800/30 bg-[#070b0a]/95 backdrop-blur-md px-4 py-3 animate-slide-in-left">
+          <div className="flex flex-col gap-1">
+            {NAV_LINKS.map((link) => (
+              <a
+                key={link.label}
+                href={link.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className="px-3 py-2.5 text-sm font-medium text-zinc-400 hover:text-zinc-100 transition-colors rounded-lg hover:bg-zinc-800/40"
+              >
+                {link.label}
+              </a>
             ))}
+            <div className="flex items-center gap-4 mt-2 pt-2 border-t border-zinc-800/30">
+              <a href="#" className="text-xs text-zinc-500 hover:text-zinc-300">Documentação API</a>
+              <a href="#" className="text-xs text-zinc-500 hover:text-zinc-300">Status</a>
+            </div>
           </div>
-        </div>
+        </nav>
+      )}
 
-        {/* RIGHT: Auth + Marketing */}
-        <div className="lg:w-[440px] xl:w-[480px] shrink-0 flex flex-col justify-center p-4 sm:p-6 lg:p-8 lg:border-l border-t lg:border-t-0 border-zinc-800/30 bg-[#070b0a]/50 backdrop-blur-sm">
-          <div className="max-w-md mx-auto w-full space-y-6 animate-slide-in-right">
+      {/* === MAIN CONTENT === */}
+      <div className="relative z-10 flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
+
+        {/* MOBILE: Auth first (order-1), Crypto second (order-2) */}
+        {/* DESKTOP: LEFT = Crypto (no order), RIGHT = Auth (no order) */}
+
+        {/* RIGHT: Auth + Marketing — order-1 on mobile, order-last on desktop */}
+        <div className="order-1 lg:order-last lg:w-[440px] xl:w-[480px] shrink-0 flex flex-col justify-center p-4 sm:p-6 lg:p-8 lg:border-l border-t lg:border-t-0 border-zinc-800/30 bg-[#070b0a]/50 backdrop-blur-sm">
+          <div className="max-w-md mx-auto w-full space-y-5 animate-slide-in-right">
             {/* Branding */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <div className="flex items-center justify-center w-12 h-12 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 animate-float-up">
                   <Hexagon className="w-7 h-7 text-emerald-400" strokeWidth={1.5} />
@@ -255,7 +273,7 @@ export default function AtlasLanding() {
                   A ponte entre o sistema financeiro tradicional e a economia digital.
                 </p>
               </div>
-              <div className="flex items-center gap-3 pt-1">
+              <div className="flex items-center gap-2 pt-1 flex-wrap">
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
                   <Shield className="w-3 h-3 text-emerald-400" />
                   <span className="text-[10px] font-medium text-emerald-300">Seguro</span>
@@ -294,7 +312,7 @@ export default function AtlasLanding() {
                 </button>
               </div>
 
-              <div className="p-6">
+              <div className="p-5 sm:p-6">
                 {loginError && (
                   <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
                     <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
@@ -440,27 +458,85 @@ export default function AtlasLanding() {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
 
-            <div className="pt-2 border-t border-zinc-800/30">
-              <p className="text-[10px] text-zinc-600 leading-relaxed text-center">
-                Atlas Core Banking v2.0 · Infraestrutura Web3 Institucional
-              </p>
+        {/* LEFT: Crypto Exchange Data — order-2 on mobile (comes after auth), first on desktop */}
+        <div className="order-2 lg:order-first lg:flex-1 flex flex-col min-h-0 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+          {/* Stats row - horizontal scroll on mobile */}
+          <div className="flex items-center gap-4 sm:gap-6 mb-5 overflow-x-auto pb-2 -mx-1 px-1 animate-slide-in-left">
+            {[
+              { value: '$2.4B+', label: 'Volume Processado' },
+              { value: '150K+', label: 'Transações/Mês' },
+              { value: '99.9%', label: 'Uptime' },
+              { value: '< 2s', label: 'Settlement' },
+            ].map((stat) => (
+              <div key={stat.label} className="flex flex-col shrink-0">
+                <span className="text-xs sm:text-sm font-bold text-zinc-300 tabular-nums">{stat.value}</span>
+                <span className="text-[9px] text-zinc-600 uppercase tracking-wider">{stat.label}</span>
+              </div>
+            ))}
+          </div>
+
+          <div id="market" className="mb-4 animate-slide-in-left">
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingUp className="w-4 h-4 text-emerald-400" />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-400/80">Mercado Ao Vivo</span>
             </div>
+            <h2 className="text-lg sm:text-xl font-bold text-zinc-100">Crypto Markets</h2>
+          </div>
+
+          <div className="animate-slide-in-left" style={{ animationDelay: '0.1s' }}>
+            <CryptoCards />
+          </div>
+
+          {/* TradingView - hidden on very small screens */}
+          <div className="mt-6 rounded-xl border border-zinc-800/40 bg-zinc-900/30 overflow-hidden animate-slide-in-left hidden sm:block" style={{ animationDelay: '0.3s' }}>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800/40">
+              <Globe className="w-3.5 h-3.5 text-emerald-400/60" />
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">TradingView — Market Overview</span>
+            </div>
+            <div className="h-[320px] sm:h-[380px]">
+              <TradingViewWidget type="market-overview" height={380} />
+            </div>
+          </div>
+
+          {/* Features */}
+          <div id="features" className="mt-6 grid grid-cols-2 gap-3 animate-slide-in-left" style={{ animationDelay: '0.5s' }}>
+            {FEATURES.map((feat) => (
+              <div key={feat.title} className="group flex flex-col gap-2 p-3.5 rounded-xl border border-zinc-800/30 bg-zinc-900/20 transition-all hover:border-emerald-500/20 hover:bg-zinc-900/40">
+                <feat.icon className="w-4 h-4 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
+                <span className="text-xs font-semibold text-zinc-200">{feat.title}</span>
+                <span className="text-[10px] leading-relaxed text-zinc-500">{feat.desc}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 pt-4 border-t border-zinc-800/30">
+            <p className="text-[10px] text-zinc-600 leading-relaxed text-center">
+              Atlas Core Banking v2.0 · Infraestrutura Web3 Institucional
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-zinc-800/30 bg-[#070b0a]/80 backdrop-blur-sm px-4 sm:px-8 py-3">
+      {/* === FOOTER (sticky) === */}
+      <footer className="relative z-10 border-t border-zinc-800/30 bg-[#070b0a]/80 backdrop-blur-sm px-4 sm:px-6 lg:px-8 py-3 mt-auto">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Hexagon className="w-4 h-4 text-zinc-700" />
-            <span className="text-[10px] text-zinc-600">© 2025 Atlas Core Banking. Todos os direitos reservados.</span>
+            <span className="text-[10px] text-zinc-600">&copy; 2025 Atlas Core Banking. Todos os direitos reservados.</span>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-[10px] text-zinc-700">Suporte</span>
-            <span className="text-[10px] text-zinc-700">Documentação API</span>
-            <span className="text-[10px] text-zinc-700">Status</span>
+          <div className="flex items-center gap-4 sm:gap-6">
+            <a href="#" className="flex items-center gap-1 text-[10px] text-zinc-700 hover:text-zinc-400 transition-colors">
+              <FileText className="w-3 h-3" />
+              Documentação
+            </a>
+            <a href="#" className="flex items-center gap-1 text-[10px] text-zinc-700 hover:text-zinc-400 transition-colors">
+              <HelpCircle className="w-3 h-3" />
+              Suporte
+            </a>
+            <a href="#" className="text-[10px] text-zinc-700 hover:text-zinc-400 transition-colors">Status</a>
           </div>
         </div>
       </footer>

@@ -45,6 +45,7 @@ interface AuthState {
   updateUser: (user: Partial<AuthUser>) => void;
   logout: () => void;
   setLoading: (loading: boolean) => void;
+  getUserRole: () => string;
   isOperator: () => boolean;
   isMerchant: () => boolean;
 }
@@ -54,6 +55,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   customer: 'Customer',
   merchant: 'Merchant',
   super_merchant: 'Super Merchant',
+  admin: 'Admin',
   operator: 'Operator',
 };
 
@@ -113,6 +115,23 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canManageOrganizations: false,
     canManageUsers: false,
   },
+  admin: {
+    canViewDashboard: true,
+    canViewWallets: true,
+    canDeposit: true,
+    canSwap: true,
+    canWithdraw: true,
+    canViewTransactions: true,
+    canGeneratePaymentLinks: true,
+    canManageApiKeys: true,
+    canConfigureCheckouts: true,
+    canViewSubClients: true,
+    canManageTickets: true,
+    canApproveKyc: true,
+    canConfigureFees: true,
+    canManageOrganizations: true,
+    canManageUsers: true,
+  },
   operator: {
     canViewDashboard: true,
     canViewWallets: true,
@@ -162,6 +181,10 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setLoading: (loading: boolean) => set({ isLoading: loading }),
+
+      getUserRole: (): string => {
+        return get().user?.role || 'customer';
+      },
 
       isOperator: (): boolean => {
         const user = get().user;

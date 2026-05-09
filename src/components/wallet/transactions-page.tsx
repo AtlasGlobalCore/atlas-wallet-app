@@ -74,7 +74,7 @@ const TYPE_ICONS: Record<TransactionType, React.ReactNode> = {
 };
 
 function getAmountColor(type: TransactionType, status: TransactionStatus): string {
-  if (status === TransactionStatus.COMPLETED && (type === TransactionType.PROXY_INCOMING || type === TransactionType.INCOMING)) {
+  if (status === TransactionStatus.COMPLETED && (type === TransactionType.PROXY_INCOMING || type === TransactionType.SETTLEMENT)) {
     return 'text-emerald-400';
   }
   if (status === TransactionStatus.COMPLETED && type === TransactionType.TRANSFER) {
@@ -192,7 +192,7 @@ export default function TransactionsPage() {
   const hasActiveFilters = typeFilter !== 'all' || statusFilter !== 'all' || dateFrom || dateTo || search;
 
   // Pagination page numbers
-  const pageNumbers = [];
+  const pageNumbers: (number | string)[] = [];
   for (let i = 1; i <= totalPages; i++) {
     if (i === 1 || i === totalPages || (i >= safeCurrentPage - 1 && i <= safeCurrentPage + 1)) {
       pageNumbers.push(i);
